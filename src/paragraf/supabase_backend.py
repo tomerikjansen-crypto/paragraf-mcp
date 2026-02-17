@@ -1348,6 +1348,103 @@ class LovdataSupabaseService:
 
         return safe_execute(_execute, f"Failed to list structures for {dok_id}", default=[]) or []
 
+    def get_chapter_sections(
+        self, dok_id: str, chapter_id: str
+    ) -> tuple[dict | None, list[LawSection]]:
+        """
+        Get all sections belonging to a chapter.
+
+        Looks up the chapter in lovdata_structure by structure_id, then finds
+        all sections whose address starts with the chapter's address prefix.
+
+        Args:
+            dok_id: Document ID or alias
+            chapter_id: Chapter identifier (e.g. "16", "III", "8 a")
+
+        Returns:
+            Tuple of (chapter_info dict or None, list of LawSection).
+            chapter_info has keys: structure_id, title, address.
+        """
+        doc = self._find_document(dok_id)
+        if not doc:
+            return None, []
+
+        resolved_id = doc["dok_id"]
+
+        # Step 1: Find the chapter in lovdata_structure
+        @with_retry()
+        def _find_chapter():
+            # Exact match first
+            result = (
+                self.client.table("lovdata_structure")
+                .select("structure_id, title, address")
+                .eq("dok_id", resolved_id)
+                .eq("structure_type", "kapittel")
+                .eq("structure_id", chapter_id)
+                .limit(1)
+                .execute()
+            )
+            if result.data:
+                return result.data[0]
+
+            # Case-insensitive fallback
+            result = (
+                self.client.table("lovdata_structure")
+                .select("structure_id, title, address")
+                .eq("dok_id", resolved_id)
+                .eq("structure_type", "kapittel")
+                .ilike("structure_id", chapter_id)
+                .limit(1)
+                .execute()
+            )
+            return result.data[0] if result.data else None
+
+        chapter = safe_execute(
+            _find_chapter,
+            f"Failed to find chapter {chapter_id} in {dok_id}",
+            default=None,
+        )
+        if not chapter or not chapter.get("address"):
+            return None, []
+
+        chapter_address = chapter["address"]
+
+        # Step 2: Find all sections with address LIKE '{chapter_address}-%'
+        # The trailing hyphen prevents matching sibling chapters
+        # (e.g. 'kapittel-2-kapittel-1' won't match 'kapittel-2-kapittel-10-...')
+        @with_retry()
+        def _find_sections():
+            return (
+                self.client.table("lovdata_sections")
+                .select("dok_id, section_id, title, content, address, char_count")
+                .eq("dok_id", resolved_id)
+                .like("address", f"{chapter_address}-%")
+                .order("address")
+                .execute()
+            )
+
+        result = safe_execute(
+            _find_sections,
+            f"Failed to fetch sections for chapter {chapter_id} in {dok_id}",
+            default=None,
+        )
+        if not result or not result.data:
+            return chapter, []
+
+        sections = [
+            LawSection(
+                dok_id=row["dok_id"],
+                section_id=row["section_id"],
+                title=row.get("title"),
+                content=row["content"],
+                address=row.get("address"),
+                char_count=row.get("char_count") or len(row["content"]),
+            )
+            for row in result.data
+        ]
+
+        return chapter, sections
+
     def get_sync_status(self) -> dict:
         """Get sync status for all datasets."""
 

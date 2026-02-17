@@ -96,7 +96,7 @@ Lovdata API (tar.bz2) -> Streaming download -> XML-parsing -> Upsert til DB
 |---------|-------------|
 | `sok(query, departement?, doc_type?, rettsomrade?, inkluder_endringslover?)` | Fulltekstsok med norsk stemming + filtre |
 | `semantisk_sok(query, doc_type?, ministry?, rettsomrade?, inkluder_endringslover?)` | Hybrid vektorsok (naturlig sprak) |
-| `lov(id, paragraf)` | Hent lovtekst (uten paragraf = innholdsfortegnelse med metadata) |
+| `lov(id, paragraf)` | Hent lovtekst, kapittel ('Kapittel X'/'kap X'), eller innholdsfortegnelse |
 | `forskrift(id, paragraf)` | Hent forskriftstekst (uten paragraf = innholdsfortegnelse med hjemmelslov) |
 | `hent_flere(id, paragrafer)` | Batch-henting (~80% raskere) |
 | `relaterte_forskrifter(lov_id)` | Finn forskrifter med hjemmel i en lov |

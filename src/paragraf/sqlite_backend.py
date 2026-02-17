@@ -1106,6 +1106,17 @@ class LovdataSyncService:
             # Return in requested order
             return [sections_dict[sid] for sid in clean_ids if sid in sections_dict]
 
+    def get_chapter_sections(
+        self, dok_id: str, chapter_id: str  # noqa: ARG002
+    ) -> tuple[dict | None, list[LawSection]]:
+        """
+        Get all sections belonging to a chapter.
+
+        SQLite backend does not have a structures table, so this always returns
+        no results. Chapter lookup is only supported with the Supabase backend.
+        """
+        return None, []
+
     def _normalize_id(self, id_str: str) -> str:
         """Normalize document ID to match database format."""
         # Handle various ID formats

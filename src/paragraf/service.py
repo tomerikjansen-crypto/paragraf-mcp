@@ -45,6 +45,9 @@ LARGE_RESPONSE_THRESHOLD = 5000  # tokens
 # Sentinel returned by _fetch_law_content when document exists but section does not
 _SECTION_NOT_FOUND = "__SECTION_NOT_FOUND__"
 
+# Pattern to detect chapter input (e.g. "Kapittel 16", "kap. III", "kap 8 a")
+_CHAPTER_RE = re.compile(r"^(?:kapittel|kap\.?)\s+(.+)$", re.IGNORECASE)
+
 # Lazy service singletons
 _supabase_service = None
 _sqlite_service = None
@@ -379,6 +382,25 @@ class LovdataService:
 
                         return content
 
+                # Check if this is a chapter lookup (e.g. "Kapittel 16", "kap III")
+                chapter_match = _CHAPTER_RE.match(paragraf)
+                if chapter_match and hasattr(backend, "get_chapter_sections"):
+                    chapter_id = chapter_match.group(1).strip()
+                    chapter_info, sections = backend.get_chapter_sections(
+                        lov_id, chapter_id
+                    )
+                    if chapter_info and sections:
+                        return self._format_chapter(
+                            chapter_info, sections, max_tokens
+                        )
+                    elif chapter_info:
+                        # Chapter exists but has no sections
+                        return (
+                            f"**{chapter_info.get('title', f'Kapittel {chapter_id}')}**\n\n"
+                            "*Ingen paragrafer funnet i dette kapittelet.*"
+                        )
+                    # Chapter not found — fall through to _SECTION_NOT_FOUND
+
                 # Check if document exists at all (to differentiate errors)
                 doc = backend.get_document(lov_id)
                 if doc:
@@ -624,6 +646,54 @@ class LovdataService:
                 parts.append(doc_id)
         return "; ".join(parts)
 
+    def _format_chapter(
+        self,
+        chapter_info: dict,
+        sections: list,
+        max_tokens: int | None = None,
+    ) -> str:
+        """
+        Format all sections in a chapter for display.
+
+        Shows chapter title, then each section with heading and content.
+        Respects max_tokens by showing a TOC-only fallback if content is too large.
+        """
+        title = chapter_info.get("title", f"Kapittel {chapter_info.get('structure_id', '?')}")
+        total_chars = sum(s.char_count for s in sections)
+        total_tokens = int(total_chars / CHARS_PER_TOKEN)
+
+        # Build header
+        header = f"## {title}\n\n"
+        header += f"*{len(sections)} paragrafer, ~{total_tokens} tokens*\n\n"
+
+        # Check if we need to truncate
+        max_chars = int(max_tokens * CHARS_PER_TOKEN) if max_tokens else None
+        if max_chars and total_chars > max_chars:
+            # Too large — show TOC with sizes instead
+            header += "**Kapittelet er for stort til å vise i sin helhet. Innhold:**\n\n"
+            for s in sections:
+                tokens = int(s.char_count / CHARS_PER_TOKEN)
+                label = f"§ {s.section_id}"
+                if s.title:
+                    label += f": {s.title}"
+                header += f"- {label} (~{tokens} tokens)\n"
+            header += (
+                f"\n*Bruk `lov(id, paragraf)` for å hente enkeltparagrafer, "
+                f"eller øk max_tokens (nå: {max_tokens}).*"
+            )
+            return header
+
+        # Full content
+        parts = [header]
+        for s in sections:
+            section_header = f"### § {s.section_id}"
+            if s.title:
+                section_header += f": {s.title}"
+            parts.append(section_header)
+            parts.append(s.content)
+
+        return "\n\n".join(parts)
+
     def _format_table_of_contents(
         self, doc: dict, sections: list[dict], structures: list[dict] | None = None
     ) -> str:
@@ -826,7 +896,12 @@ class LovdataService:
         is_current: bool | None = None,
     ) -> str:
         """Format successful lookup response."""
-        section_header = f"§ {paragraf}" if paragraf else "(hele loven)"
+        if not paragraf:
+            section_header = "(hele loven)"
+        elif _CHAPTER_RE.match(paragraf):
+            section_header = paragraf
+        else:
+            section_header = f"§ {paragraf}"
 
         header = law_name
         if is_current is False:

@@ -35,7 +35,7 @@ Tilgang til norske lover og forskrifter fra Lovdata Public API (92 000+ paragraf
 
 | Verktøy | Bruk |
 |---------|------|
-| `lov(lov_id, paragraf?)` | Slå opp lov. Uten paragraf → hierarkisk innholdsfortegnelse med metadata |
+| `lov(lov_id, paragraf?)` | Slå opp lov, kapittel ('Kapittel X'/'kap X'), eller innholdsfortegnelse |
 | `forskrift(id, paragraf?)` | Slå opp forskrift. Uten paragraf → innholdsfortegnelse med hjemmelslov |
 | `sok(query, limit?, departement?, doc_type?, rettsomrade?, inkluder_endringslover?)` | **FTS-søk** med filtre |
 | `semantisk_sok(query, limit?, doc_type?, ministry?, rettsomrade?, inkluder_endringslover?)` | **AI-søk** for naturlig språk |
@@ -94,7 +94,8 @@ FTS prøver AND-logikk først. Hvis 0 treff, faller den automatisk tilbake til O
 3. **Trenger flere §§?** → `hent_flere()` er ~80% raskere
 4. **Før henting av kapitler/store §§** → `sjekk_storrelse()` ALLTID. Spør bruker ved >5000 tokens
 5. **Presis sitering?** → `lov("navn", "paragraf")`
-6. **ALLTID etter søk** → Tilby systematisk utforskning (se under)
+6. **Helt kapittel?** → `lov("navn", "Kapittel X")` eller `lov("navn", "kap X")`
+7. **ALLTID etter søk** → Tilby systematisk utforskning (se under)
 
 ## VIKTIG: Sjekk størrelse før store hentinger
 
@@ -130,7 +131,7 @@ Hvis <2000 tokens: trygt å hente direkte.
 1. Du søker og finner § 15-6 (oppsigelsesvern i prøvetid)
 2. Du henter `lov("aml")` og ser at kapittel 15 handler om opphør
 3. Du gir svaret basert på § 15-6 og § 15-3 (frister)
-4. Du avslutter med: "Vil du se hele kapittel 15 om opphør av arbeidsforhold?"
+4. Du avslutter med: "Vil du se hele kapittel 15 om opphør av arbeidsforhold?" → `lov("aml", "Kapittel 15")`
 
 ## Viktig om lov-IDer
 
@@ -228,8 +229,8 @@ class MCPServer:
                         "paragraf": {
                             "type": "string",
                             "description": (
-                                "Paragrafnummer uten §-tegn. "
-                                "Format: '3-9', '14-9', '17'. "
+                                "Paragrafnummer uten §-tegn, eller 'Kapittel X' / 'kap X' for hele kapitler. "
+                                "Format: '3-9', '14-9', 'Kapittel 16', 'kap III'. "
                                 "Utelat for dokumentoversikt."
                             ),
                         },
