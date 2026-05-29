@@ -33,6 +33,18 @@ _IGNORED_DIRECT_CHILD_CLASSES = {
     "footnotes",
 }
 
+# Innholdsbaerende klasser utenfor legal_p_classes som skal suppleres inn naar
+# de ligger som direkte barn (ellers droppes de stille naar ledd allerede er
+# fanget). Bekreftet mot korpus 2026-05-30: marginIdArticle (marg-nummererte
+# paragrafledd), defaultList (substansielle listeledd), indent (definisjoner),
+# centeredP. futureLegalArticle bevisst utelatt (ikke-ikrafttraadt tekst).
+_SUPPLEMENT_CONTENT_CLASSES = {
+    "marginIdArticle",
+    "defaultList",
+    "indent",
+    "centeredP",
+}
+
 
 # =============================================================================
 # Configuration
@@ -683,6 +695,12 @@ class LovdataSyncService:
                     if class_set & legal_p_classes and "footnote" not in " ".join(classes).lower():
                         text = child.get_text(strip=True)
                         if text:
+                            content_parts.append(text)
+                    elif class_set & _SUPPLEMENT_CONTENT_CLASSES:
+                        # Innholdsbaerende direkte-barn utenfor legal_p_classes
+                        # (bekreftet mot korpus). Suppleres inn med dedupe.
+                        text = child.get_text(strip=True)
+                        if text and text not in content_parts:
                             content_parts.append(text)
                     elif not (class_set & _IGNORED_DIRECT_CHILD_CLASSES):
                         # Ukjent klasse som ikke er fanget og ikke kjent metadata.

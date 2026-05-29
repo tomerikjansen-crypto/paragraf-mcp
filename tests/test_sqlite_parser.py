@@ -276,3 +276,23 @@ def test_dropped_unknown_sibling_is_logged(tmp_path, caplog):
     # kun - den skal ikke omdirigere eller droppe innhold fra if-grenen).
     assert "Fanget ledd-tekst." in secs["10-1"].content
     assert any("merkverdigInnhold" in rec.getMessage() for rec in caplog.records)
+
+
+# Innholdsbaerende soesken i en klasse utenfor legal_p_classes (her: indent)
+# ved siden av et fanget ledd. Skal suppleres inn, ikke droppes stille.
+SUPPLEMENT_SIBLING = """<!DOCTYPE html><html><body><main class="documentBody">
+<article class="legalArticle" data-name="§5-2" id="kapittel-5-paragraf-2">
+  <h4 class="legalArticleHeader">
+    <span class="legalArticleValue">§ 5-2</span>. <span class="legalArticleTitle">Supplement</span>
+  </h4>
+  <article class="numberedLegalP" data-numerator="1" id="kapittel-5-paragraf-2-nummer-1">(1) Et fanget nummerert ledd.</article>
+  <div class="indent">Innrykket bindende prosa som maa suppleres inn.</div>
+</article>
+</main></body></html>"""
+
+
+def test_content_bearing_sibling_supplemented(tmp_path):
+    """Innholdsbaerende soesken (f.eks. indent) skal suppleres, ikke droppes."""
+    content = _parse(tmp_path, SUPPLEMENT_SIBLING)["5-2"].content
+    assert "Et fanget nummerert ledd" in content
+    assert "Innrykket bindende prosa som maa suppleres inn" in content
