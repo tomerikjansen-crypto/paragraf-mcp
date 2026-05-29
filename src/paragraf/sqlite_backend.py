@@ -698,7 +698,11 @@ class LovdataSyncService:
                             content_parts.append(text)
                     elif class_set & _SUPPLEMENT_CONTENT_CLASSES:
                         # Innholdsbaerende direkte-barn utenfor legal_p_classes
-                        # (bekreftet mot korpus). Suppleres inn med dedupe.
+                        # (bekreftet mot korpus). MAA staa foer logge-grenen
+                        # under - ellers ville innholdet logges som "droppet"
+                        # i stedet for aa fanges. Dedupe mot allerede-fanget
+                        # ledd-tekst (et supplement kan gjenta tekst fra et
+                        # overliggende ledd).
                         text = child.get_text(strip=True)
                         if text and text not in content_parts:
                             content_parts.append(text)

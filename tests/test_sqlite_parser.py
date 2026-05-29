@@ -296,3 +296,25 @@ def test_content_bearing_sibling_supplemented(tmp_path):
     content = _parse(tmp_path, SUPPLEMENT_SIBLING)["5-2"].content
     assert "Et fanget nummerert ledd" in content
     assert "Innrykket bindende prosa som maa suppleres inn" in content
+
+
+# marginIdArticle (marg-nummerert paragraftekst) er den stoerste supplement-
+# klassen og maa ikke forveksles med marginIdLegalP (som er i legal_p_classes).
+# Begge skal fanges - via hver sin gren.
+MARGINID_ARTICLE = """<!DOCTYPE html><html><body><main class="documentBody">
+<article class="legalArticle" data-name="§6-1" id="kapittel-6-paragraf-1">
+  <h4 class="legalArticleHeader">
+    <span class="legalArticleValue">§ 6-1</span>. <span class="legalArticleTitle">Vedtekter</span>
+  </h4>
+  <article class="marginIdLegalP" id="kapittel-6-paragraf-1-ledd-1">Et marginIdLegalP-ledd fanget av legal_p-grenen.</article>
+  <article class="marginIdArticle" id="kapittel-6-paragraf-1-marg-1">1.1. Marg-nummerert paragraftekst fanget av supplement-grenen.</article>
+</article>
+</main></body></html>"""
+
+
+def test_marginidarticle_supplemented_not_confused_with_marginidlegalp(tmp_path):
+    """marginIdArticle (supplement) og marginIdLegalP (legal_p) er ulike klasser
+    og skal begge fanges - via hver sin gren."""
+    content = _parse(tmp_path, MARGINID_ARTICLE)["6-1"].content
+    assert "marginIdLegalP-ledd fanget av legal_p-grenen" in content
+    assert "Marg-nummerert paragraftekst fanget av supplement-grenen" in content
