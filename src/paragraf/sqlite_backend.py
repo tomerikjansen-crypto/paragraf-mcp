@@ -644,12 +644,46 @@ class LovdataSyncService:
                 title_span = article.find("span", class_="legalArticleTitle")
                 title = title_span.get_text(strip=True) if title_span else None
 
-                # Get content (all legalP elements)
+                # Get content from direct legal-paragraph children.
+                # Lovdata XML wraps each numbered ledd in <article
+                # class="numberedLegalP">, which may itself contain a nested
+                # letter list (ol > li > listArticle > legalP). Iterating DIRECT
+                # children (not find_all, which recurses) captures each ledd's
+                # full text in one pass and avoids double-counting the nested
+                # legalP items. Matching only "legalP" dropped numbered-ledd
+                # prose silently - e.g. § 13-5 (1) "200 Bq" (issue #8).
+                # defaultP holds free-form prose and tables (e.g. the
+                # energy-measure / U-value tables in § 14-5). changesToParent
+                # (amendment notes) is intentionally excluded - it is metadata,
+                # not binding regulation text.
+                legal_p_classes = {
+                    "legalP",
+                    "numberedLegalP",
+                    "listLegalP",
+                    "marginIdLegalP",
+                    "defaultP",
+                }
                 content_parts = []
-                for ledd in article.find_all("article", class_="legalP"):
-                    content_parts.append(ledd.get_text(strip=True))
+                for child in article.children:
+                    if not (hasattr(child, "get") and child.get("class")):
+                        continue
+                    classes = child.get("class")
+                    if isinstance(classes, str):
+                        classes = [classes]
+                    if set(classes) & legal_p_classes and "footnote" not in " ".join(classes).lower():
+                        text = child.get_text(strip=True)
+                        if text:
+                            content_parts.append(text)
 
-                # Also get direct text content
+                # Fallback 1: no direct legal-paragraph children (unusual
+                # nesting) - recurse for any legalP descendants.
+                if not content_parts:
+                    for ledd in article.find_all("article", class_="legalP"):
+                        text = ledd.get_text(strip=True)
+                        if text:
+                            content_parts.append(text)
+
+                # Fallback 2: still empty - take the whole article text.
                 if not content_parts:
                     content_parts.append(article.get_text(strip=True))
 
