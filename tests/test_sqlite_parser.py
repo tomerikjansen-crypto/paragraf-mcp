@@ -176,3 +176,78 @@ def test_leddfortsettelse_after_list_is_retained(tmp_path):
     # Sanity: ledd-intro og listeelementer fortsatt med (ingen regresjon)
     assert "Renter av utl" in content
     assert "Renter av plasseringer" in content
+
+
+# listLegalP og marginIdLegalP er to legalP-varianter i legal_p_classes-settet
+# men uten egen testdekning. Begge skal fanges av direkte-barn-loopen.
+VARIANT_LEDD = """<!DOCTYPE html><html><body><main class="documentBody">
+<article class="legalArticle" data-name="§7-2" id="kapittel-7-paragraf-2">
+  <h4 class="legalArticleHeader">
+    <span class="legalArticleValue">§ 7-2</span>. <span class="legalArticleTitle">Varianter</span>
+  </h4>
+  <article class="listLegalP" id="kapittel-7-paragraf-2-ledd-1">Tekst i et listLegalP-ledd.</article>
+  <article class="marginIdLegalP" id="kapittel-7-paragraf-2-ledd-2">Tekst i et marginIdLegalP-ledd.</article>
+</article>
+</main></body></html>"""
+
+# Et barn med kombinert klasse "legalP footnote" skal ekskluderes (fotnoter er
+# ikke forskriftstekst), mens et rent legalP-ledd ved siden av skal beholdes.
+FOOTNOTE_LEDD = """<!DOCTYPE html><html><body><main class="documentBody">
+<article class="legalArticle" data-name="§8-1" id="kapittel-8-paragraf-1">
+  <h4 class="legalArticleHeader">
+    <span class="legalArticleValue">§ 8-1</span>. <span class="legalArticleTitle">Med fotnote</span>
+  </h4>
+  <article class="legalP" id="kapittel-8-paragraf-1-ledd-1">Dette er bindende ledd-tekst.</article>
+  <article class="legalP footnote" id="kapittel-8-paragraf-1-fotnote-1">Dette er en fotnote som ikke skal med.</article>
+</article>
+</main></body></html>"""
+
+# Fallback 1: ingen direkte legal-p-barn (legalP pakket i ukjent <div>-wrapper),
+# saa direkte-barn-loopen gir tomt og rekursjonen etter legalP maa traa inn.
+FALLBACK1_WRAPPED = """<!DOCTYPE html><html><body><main class="documentBody">
+<article class="legalArticle" data-name="§9-1" id="kapittel-9-paragraf-1">
+  <h4 class="legalArticleHeader">
+    <span class="legalArticleValue">§ 9-1</span>. <span class="legalArticleTitle">Pakket</span>
+  </h4>
+  <div class="ukjentWrapper">
+    <article class="legalP" id="kapittel-9-paragraf-1-ledd-1">Dypt nostet ledd-tekst her.</article>
+  </div>
+</article>
+</main></body></html>"""
+
+# Fallback 2: gyldig legalArticleValue men ingen legalP-etterkommere i det hele
+# tatt, saa hele artikkelteksten tas (en paragraf lagres aldri helt tom).
+FALLBACK2_BARE = """<!DOCTYPE html><html><body><main class="documentBody">
+<article class="legalArticle" data-name="§9-2" id="kapittel-9-paragraf-2">
+  <h4 class="legalArticleHeader">
+    <span class="legalArticleValue">§ 9-2</span>. <span class="legalArticleTitle">Bar</span>
+  </h4>
+  <div class="ukjentWrapper">Kun loes tekst uten legalP-tagger.</div>
+</article>
+</main></body></html>"""
+
+
+def test_listlegalp_and_marginidlegalp_retained(tmp_path):
+    """Begge legalP-variantene i settet skal fanges av direkte-barn-loopen."""
+    content = _parse(tmp_path, VARIANT_LEDD)["7-2"].content
+    assert "listLegalP-ledd" in content
+    assert "marginIdLegalP-ledd" in content
+
+
+def test_footnote_class_excluded(tmp_path):
+    """Barn med 'footnote' i klassesettet ekskluderes, ledd-tekst beholdes."""
+    content = _parse(tmp_path, FOOTNOTE_LEDD)["8-1"].content
+    assert "bindende ledd-tekst" in content
+    assert "fotnote som ikke skal med" not in content
+
+
+def test_fallback1_recurses_for_wrapped_legalp(tmp_path):
+    """Fallback 1: legalP pakket i ukjent wrapper fanges via rekursjon."""
+    content = _parse(tmp_path, FALLBACK1_WRAPPED)["9-1"].content
+    assert "Dypt nostet ledd-tekst her" in content
+
+
+def test_fallback2_takes_whole_article_when_no_legalp(tmp_path):
+    """Fallback 2: uten legalP-etterkommere tas hele artikkelteksten."""
+    content = _parse(tmp_path, FALLBACK2_BARE)["9-2"].content
+    assert "Kun loes tekst uten legalP-tagger" in content
