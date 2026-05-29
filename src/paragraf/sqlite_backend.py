@@ -675,6 +675,16 @@ class LovdataSyncService:
                         if text:
                             content_parts.append(text)
 
+                # Include leddfortsettelse: prose continuing a ledd after an
+                # inserted list. It is a sibling <p class="leddfortsettelse">
+                # and is binding text, but the direct-child loop above skips it
+                # (not a legal_p class) and the fallbacks never fire when other
+                # ledd were captured. Mirrors supabase_backend.py:668-672.
+                for cont in article.find_all("p", class_="leddfortsettelse"):
+                    text = cont.get_text(strip=True)
+                    if text and text not in content_parts:
+                        content_parts.append(text)
+
                 # Fallback 1: no direct legal-paragraph children (unusual
                 # nesting) - recurse for any legalP descendants.
                 if not content_parts:

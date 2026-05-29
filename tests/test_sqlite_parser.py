@@ -87,6 +87,26 @@ TEK17_14_5 = """<!DOCTYPE html><html><body><main class="documentBody">
 </article>
 </main></body></html>"""
 
+# Ledd med innskutt bokstavliste etterfulgt av leddfortsettelse-prosa.
+# <p class="leddfortsettelse"> er bindende lovtekst som fortsetter leddet
+# ETTER lista. Ligger som direkte barn av legalArticle og ble droppet stille:
+# direkte-barn-loopen fant allerede numberedLegalP (content_parts ikke-tom),
+# saa fallbackene fyrte aldri. Referanse: supabase_backend.py:668-672.
+REGNSKAP_5_1 = """<!DOCTYPE html><html><body><main class="documentBody">
+<article class="legalArticle" data-name="§5-1" id="kapittel-5-paragraf-1">
+  <h4 class="legalArticleHeader">
+    <span class="legalArticleValue">§ 5-1</span>. <span class="legalArticleTitle">Renteinntekter</span>
+  </h4>
+  <article class="numberedLegalP" data-numerator="1" id="kapittel-5-paragraf-1-nummer-1">(1) Resultatregnskapet skal omfatte f&#248;lgende poster:
+    <ol class="defaultList" type="a">
+      <li data-name="a." value="1"><article class="listArticle"><article class="legalP">Renter av utl&#229;n til kunder</article></article></li>
+      <li data-name="b." value="2"><article class="listArticle"><article class="legalP">Renter av plasseringer i sentralbank</article></article></li>
+    </ol>
+  </article>
+  <p class="leddfortsettelse">Sum renteinntekter og lignende inntekter</p>
+</article>
+</main></body></html>"""
+
 
 def _parse(tmp_path, html, dok_id=TEK17_DOK_ID):
     """Parse en HTML-fixture via den faktiske _parse_sections-metoden."""
@@ -146,3 +166,13 @@ def test_change_notes_excluded(tmp_path):
     """changesToParent (endringsnoter) er metadata, ikke forskriftstekst."""
     content = _parse(tmp_path, TEK17_14_5)["14-5"].content
     assert "Endret ved" not in content
+
+
+def test_leddfortsettelse_after_list_is_retained(tmp_path):
+    """Prosa som fortsetter et ledd etter en innskutt liste (leddfortsettelse)
+    er bindende lovtekst og skal med - ikke droppes naar andre ledd finnes."""
+    content = _parse(tmp_path, REGNSKAP_5_1)["5-1"].content
+    assert "Sum renteinntekter og lignende inntekter" in content
+    # Sanity: ledd-intro og listeelementer fortsatt med (ingen regresjon)
+    assert "Renter av utl" in content
+    assert "Renter av plasseringer" in content
