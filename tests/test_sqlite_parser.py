@@ -271,5 +271,8 @@ UNKNOWN_SIBLING = """<!DOCTYPE html><html><body><main class="documentBody">
 def test_dropped_unknown_sibling_is_logged(tmp_path, caplog):
     """Ukjent innholdsbaerende soesken skal logges paa DEBUG (synlighet)."""
     with caplog.at_level(logging.DEBUG, logger="paragraf.sqlite_backend"):
-        _parse(tmp_path, UNKNOWN_SIBLING)
+        secs = _parse(tmp_path, UNKNOWN_SIBLING)
+    # Det fangede ledd-innholdet skal fortsatt vaere med (elif-grenen logger
+    # kun - den skal ikke omdirigere eller droppe innhold fra if-grenen).
+    assert "Fanget ledd-tekst." in secs["10-1"].content
     assert any("merkverdigInnhold" in rec.getMessage() for rec in caplog.records)
