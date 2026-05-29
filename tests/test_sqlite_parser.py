@@ -9,6 +9,8 @@ ledd-prosaen droppet stille - bindende lovtekst forsvant.
 Fixturene under bruker EKTE Lovdata-XML-struktur (TEK17, hentet 2026-05-29).
 """
 
+import logging
+
 from paragraf.sqlite_backend import LovdataSyncService
 
 TEK17_DOK_ID = "SF/forskrift/2017-06-19-840"
@@ -251,3 +253,23 @@ def test_fallback2_takes_whole_article_when_no_legalp(tmp_path):
     """Fallback 2: uten legalP-etterkommere tas hele artikkelteksten."""
     content = _parse(tmp_path, FALLBACK2_BARE)["9-2"].content
     assert "Kun loes tekst uten legalP-tagger" in content
+
+
+# Et innholdsbaerende soesken i en ukjent klasse (ikke i legal_p_classes og
+# ikke metadata) skal logges paa DEBUG saa stille tap blir synlig.
+UNKNOWN_SIBLING = """<!DOCTYPE html><html><body><main class="documentBody">
+<article class="legalArticle" data-name="§10-1" id="kapittel-10-paragraf-1">
+  <h4 class="legalArticleHeader">
+    <span class="legalArticleValue">§ 10-1</span>. <span class="legalArticleTitle">Ukjent soesken</span>
+  </h4>
+  <article class="legalP" id="kapittel-10-paragraf-1-ledd-1">Fanget ledd-tekst.</article>
+  <div class="merkverdigInnhold">Innhold i en ukjent klasse som droppes.</div>
+</article>
+</main></body></html>"""
+
+
+def test_dropped_unknown_sibling_is_logged(tmp_path, caplog):
+    """Ukjent innholdsbaerende soesken skal logges paa DEBUG (synlighet)."""
+    with caplog.at_level(logging.DEBUG, logger="paragraf.sqlite_backend"):
+        _parse(tmp_path, UNKNOWN_SIBLING)
+    assert any("merkverdigInnhold" in rec.getMessage() for rec in caplog.records)

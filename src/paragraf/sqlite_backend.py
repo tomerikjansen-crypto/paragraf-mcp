@@ -24,6 +24,15 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
+# Direkte-barn-klasser som bevisst IKKE er innhold (metadata/struktur).
+# Brukes kun til aa unngaa stoey i synlighets-loggen i _parse_sections.
+_IGNORED_DIRECT_CHILD_CLASSES = {
+    "legalArticleHeader",
+    "changesToParent",
+    "footnote",
+    "footnotes",
+}
+
 
 # =============================================================================
 # Configuration
@@ -670,10 +679,21 @@ class LovdataSyncService:
                     classes = child.get("class")
                     if isinstance(classes, str):
                         classes = [classes]
-                    if set(classes) & legal_p_classes and "footnote" not in " ".join(classes).lower():
+                    class_set = set(classes)
+                    if class_set & legal_p_classes and "footnote" not in " ".join(classes).lower():
                         text = child.get_text(strip=True)
                         if text:
                             content_parts.append(text)
+                    elif not (class_set & _IGNORED_DIRECT_CHILD_CLASSES):
+                        # Ukjent klasse som ikke er fanget og ikke kjent metadata.
+                        # Logg paa DEBUG hvis den baerer tekst - saa stille tap
+                        # blir synlig uten aa endre parse-resultatet.
+                        skipped_text = child.get_text(strip=True)
+                        if skipped_text:
+                            logger.debug(
+                                "Droppet direkte-barn i %s (klasse=%s, %d tegn): %.60s",
+                                section_id, ",".join(classes), len(skipped_text), skipped_text,
+                            )
 
                 # Include leddfortsettelse: prose continuing a ledd after an
                 # inserted list. It is a sibling <p class="leddfortsettelse">
