@@ -173,6 +173,27 @@ def test_no_space_before_punctuation(tmp_path):
     assert "200 Bq/m3 ." not in content
 
 
+# Strikethrough (<s>) brukes til endringsmarkering MIDT I ORD i ekte Lovdata-XML
+# (f.eks. "fastsette<s>s</s>", "Rift Valley<s>-</s>feber"). Som inline-tag skal
+# den IKKE gi mellomrom rundt seg - ellers splittes ordet ("fastsette s").
+STRIKETHROUGH_INLINE = """<!DOCTYPE html><html><body><main class="documentBody">
+<article class="legalArticle" data-name="§1-9" id="k1-9">
+  <h4 class="legalArticleHeader"><span class="legalArticleValue">§ 1-9</span></h4>
+  <article class="legalP" id="k1-9-ledd-1">Departementet kan fastsette<s>s</s> n&#230;rmere regler om Rift Valley<s>-</s>feber.</article>
+</article>
+</main></body></html>"""
+
+
+def test_strikethrough_inline_not_split(tmp_path):
+    """Strikethrough (<s>), brukt til endringsmarkering midt i ord, skal ikke
+    splitte ordet ('fastsettes', ikke 'fastsette s')."""
+    content = _parse(tmp_path, STRIKETHROUGH_INLINE)["1-9"].content
+    assert "fastsettes" in content
+    assert "fastsette s" not in content
+    assert "Rift Valley-feber" in content
+    assert "Rift Valley - feber" not in content
+
+
 def test_flat_legalp_ledd_still_parsed(tmp_path):
     """Flate legalP-ledd (uten nummerering) skal fortsatt parses korrekt."""
     content = _parse(tmp_path, TEK17_1_1)["1-1"].content

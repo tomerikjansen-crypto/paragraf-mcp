@@ -48,8 +48,9 @@ _SUPPLEMENT_CONTENT_CLASSES = {
 
 # Inline-tagger som IKKE skal gi mellomrom rundt seg - teksten inne i dem er en
 # fortsettelse av samme ord/uttrykk (f.eks. <sup> i "200 Bq/m3"). Alt annet
-# behandles som blokk -> mellomrom ved grensen.
-_INLINE_TAGS = {"sup", "sub", "em", "strong", "i", "b", "u", "a", "span", "small", "abbr"}
+# behandles som blokk -> mellomrom ved grensen. <s> staar med fordi Lovdata
+# bruker strikethrough til endringsmarkering MIDT I ORD ("fastsette<s>s</s>").
+_INLINE_TAGS = {"sup", "sub", "em", "strong", "i", "b", "u", "s", "a", "span", "small", "abbr"}
 
 
 def _block_aware_text(element) -> str:
