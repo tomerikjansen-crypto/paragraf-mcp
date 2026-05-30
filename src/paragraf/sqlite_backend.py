@@ -875,7 +875,8 @@ class LovdataSyncService:
 
             # Then find the section
             row = conn.execute(
-                "SELECT * FROM sections WHERE dok_id = ? AND section_id = ?",
+                "SELECT * FROM sections WHERE dok_id = ? AND section_id = ?"
+                " ORDER BY id DESC LIMIT 1",
                 (doc["dok_id"], section_id),
             ).fetchone()
 
@@ -1182,7 +1183,8 @@ class LovdataSyncService:
                 return None
 
             row = conn.execute(
-                "SELECT char_count, LENGTH(content) as content_len FROM sections WHERE dok_id = ? AND section_id = ?",
+                "SELECT char_count, LENGTH(content) as content_len FROM sections"
+                " WHERE dok_id = ? AND section_id = ? ORDER BY id DESC LIMIT 1",
                 (doc["dok_id"], section_id),
             ).fetchone()
 

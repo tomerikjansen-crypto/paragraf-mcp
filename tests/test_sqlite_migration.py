@@ -204,3 +204,57 @@ def test_migrering_rebuilder_fts_uten_duplikater(tmp_path):
     finally:
         con.close()
     assert n == 1
+
+
+def _seed_doc_og_seksjoner(cache_dir, rader):
+    """Konstruer tjeneste (fersk DB) og sett inn ett dokument + seksjonsrader.
+
+    rader: liste av (section_id, content, address)-tupler.
+    """
+    svc = LovdataSyncService(cache_dir=cache_dir)
+    con = sqlite3.connect(cache_dir / "lovdata.db")
+    try:
+        con.execute(
+            "INSERT OR REPLACE INTO documents (dok_id, ref_id, title, short_title, doc_type)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (DOK, DOK, "Testforskrift", "testforskrift", "forskrift"),
+        )
+        for section_id, content, address in rader:
+            con.execute(
+                "INSERT OR REPLACE INTO sections (dok_id, section_id, title, content, address, char_count)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
+                (DOK, section_id, None, content, address, len(content)),
+            )
+        con.commit()
+    finally:
+        con.close()
+    return svc
+
+
+def test_get_section_er_deterministisk_ved_kollisjon(tmp_path):
+    """Naar samme section_id finnes flere ganger, returneres nyeste (hoyeste id)."""
+    svc = _seed_doc_og_seksjoner(
+        tmp_path,
+        [
+            ("Artikkel 1", "vedlegg I", "vedlegg-1/art-1"),
+            ("Artikkel 1", "vedlegg II", "vedlegg-2/art-1"),  # hoyest id -> nyeste
+        ],
+    )
+    # Slaa opp via alias (short_title) - den realistiske kodestien.
+    sec = svc.get_section("testforskrift", "Artikkel 1")
+    assert sec is not None
+    assert sec.content == "vedlegg II"
+
+
+def test_get_section_size_er_deterministisk_ved_kollisjon(tmp_path):
+    """get_section_size skal ogsaa returnere nyeste rad deterministisk."""
+    svc = _seed_doc_og_seksjoner(
+        tmp_path,
+        [
+            ("Artikkel 1", "kort", "vedlegg-1/art-1"),
+            ("Artikkel 1", "mye lengre innhold her", "vedlegg-2/art-1"),
+        ],
+    )
+    info = svc.get_section_size("testforskrift", "Artikkel 1")
+    assert info is not None
+    assert info["char_count"] == len("mye lengre innhold her")
