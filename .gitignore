@@ -30,6 +30,9 @@ Thumbs.db
 *.db
 *.sqlite3
 
+# Lovdata cache (regenererbar fra API/XML - aldri commit)
+data/
+
 # Misc
 *.pdf
 cloudflare-*.txt

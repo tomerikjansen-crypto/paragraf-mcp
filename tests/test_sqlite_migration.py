@@ -274,3 +274,50 @@ def test_get_sections_batch_er_deterministisk_ved_kollisjon(tmp_path):
     by_id = {s.section_id: s for s in result}
     assert by_id["Artikkel 1"].content == "vedlegg II"
     assert by_id["Artikkel 2"].content == "art 2 tekst"
+
+
+# Mellomliggende schema med FEIL noekkel - slik fork-main-koden lagde ferske DB-er
+# mellom commit 0559246 og denne fiksen. Migreringen maa ogsaa korrigere denne.
+_WRONG_KEY_SECTIONS_SCHEMA = """
+    CREATE TABLE sections (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        dok_id TEXT,
+        section_id TEXT,
+        title TEXT,
+        content TEXT,
+        address TEXT,
+        char_count INTEGER DEFAULT 0,
+        UNIQUE(dok_id, section_id)
+    )
+"""
+
+
+def test_migrering_fra_feil_noekkel_schema(tmp_path):
+    """DB med feil noekkel UNIQUE(dok_id, section_id) skal migreres til korrekt noekkel."""
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(tmp_path / "lovdata.db")
+    try:
+        con.executescript(_WRONG_KEY_SECTIONS_SCHEMA)
+        con.execute(
+            "INSERT INTO sections (dok_id, section_id, title, content, address, char_count)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (DOK, "Artikkel 1", None, "bevart", "vedlegg-1/art-1", 6),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    LovdataSyncService(cache_dir=tmp_path)  # trigger migrering
+
+    con = sqlite3.connect(tmp_path / "lovdata.db")
+    try:
+        sql = con.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='sections'"
+        ).fetchone()[0]
+        assert "UNIQUE(dok_id, section_id, address)" in sql
+        # Eksisterende rad bevart gjennom migreringen
+        assert con.execute(
+            "SELECT content FROM sections WHERE dok_id=? AND section_id=?", (DOK, "Artikkel 1")
+        ).fetchone()[0] == "bevart"
+    finally:
+        con.close()
