@@ -221,6 +221,55 @@ class LovdataSyncService:
             if "documents_fts" in tables:
                 conn.execute("DROP TABLE documents_fts")
 
+            # Migration: korriger sections unique-noekkel til
+            # (dok_id, section_id, address). Eldre DB-er ble laget uten UNIQUE
+            # (INSERT OR REPLACE degraderte til INSERT -> duplikater ved re-sync),
+            # og en mellomliggende schema brukte feil noekkel UNIQUE(dok_id,
+            # section_id) som ville kollapse legitimt distinkte paragrafer med
+            # samme section_id paa tvers av vedlegg. SQLite kan ikke ALTER ADD
+            # CONSTRAINT, saa tabellen maa bygges om. Idempotent: hopper over naar
+            # korrekt constraint allerede finnes.
+            sections_def = conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='sections'"
+            ).fetchone()
+            if sections_def and "UNIQUE(dok_id, section_id, address)" not in sections_def[0]:
+                # 1. De-dupliser ekte duplikater (identisk dok+section+address),
+                #    behold hoyeste id (nyeste rad).
+                conn.execute("""
+                    DELETE FROM sections
+                    WHERE id NOT IN (
+                        SELECT MAX(id) FROM sections GROUP BY dok_id, section_id, address
+                    )
+                """)
+                # 2. Bygg tabellen om med korrekt constraint, bevar id.
+                conn.execute("""
+                    CREATE TABLE sections_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        dok_id TEXT,
+                        section_id TEXT,
+                        title TEXT,
+                        content TEXT,
+                        address TEXT,
+                        char_count INTEGER DEFAULT 0,
+                        FOREIGN KEY (dok_id) REFERENCES documents(dok_id),
+                        UNIQUE(dok_id, section_id, address)
+                    )
+                """)
+                conn.execute("""
+                    INSERT INTO sections_new
+                        (id, dok_id, section_id, title, content, address, char_count)
+                    SELECT id, dok_id, section_id, title, content, address, char_count
+                    FROM sections
+                """)
+                conn.execute("DROP TABLE sections")
+                conn.execute("ALTER TABLE sections_new RENAME TO sections")
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_sections_dok_section"
+                    " ON sections(dok_id, section_id)"
+                )
+                # 3. Rebuild FTS saa indeksen reflekterer de-dupliserte rader.
+                self._rebuild_fts_index(conn)
+
     # -------------------------------------------------------------------------
     # Download & Extract
     # -------------------------------------------------------------------------
