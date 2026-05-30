@@ -1226,6 +1226,10 @@ class LovdataSyncService:
 
             # Use IN clause with parameter placeholders
             placeholders = ",".join("?" * len(clean_ids))
+            # ORDER BY id stigende: dict-overskrivingen under gjoer at siste rad
+            # (hoyeste id = nyeste) vinner per section_id. Samme "nyeste vinner"-
+            # garanti som get_section (ORDER BY id DESC LIMIT 1), bare uttrykt via
+            # overskriving. IKKE endre til DESC - det ville bryte kontrakten.
             rows = conn.execute(
                 f"SELECT * FROM sections WHERE dok_id = ? AND section_id IN ({placeholders})"
                 " ORDER BY id",
