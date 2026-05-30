@@ -169,7 +169,7 @@ class LovdataSyncService:
                     address TEXT,
                     char_count INTEGER DEFAULT 0,
                     FOREIGN KEY (dok_id) REFERENCES documents(dok_id),
-                    UNIQUE(dok_id, section_id)
+                    UNIQUE(dok_id, section_id, address)
                 );
 
                 -- Index for fast section lookup
