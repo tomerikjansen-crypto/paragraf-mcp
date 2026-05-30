@@ -228,13 +228,17 @@ class LovdataSyncService:
             # section_id) som ville kollapse legitimt distinkte paragrafer med
             # samme section_id paa tvers av vedlegg. SQLite kan ikke ALTER ADD
             # CONSTRAINT, saa tabellen maa bygges om. Idempotent: hopper over naar
-            # korrekt constraint allerede finnes.
+            # korrekt constraint allerede finnes. conn.execute()-DDL er
+            # transaksjonell i SQLite, saa hele blokken committer atomisk via
+            # `with conn:` - et krasj midtveis rulles tilbake.
             sections_def = conn.execute(
                 "SELECT sql FROM sqlite_master WHERE type='table' AND name='sections'"
             ).fetchone()
             if sections_def and "UNIQUE(dok_id, section_id, address)" not in sections_def[0]:
                 # 1. De-dupliser ekte duplikater (identisk dok+section+address),
-                #    behold hoyeste id (nyeste rad).
+                #    behold hoyeste id (nyeste rad). Forutsetning: address er
+                #    aldri NULL i levende DB (verifisert 0 rader) - GROUP BY
+                #    behandler NULL som like, mens UNIQUE tillater mange NULL.
                 conn.execute("""
                     DELETE FROM sections
                     WHERE id NOT IN (
