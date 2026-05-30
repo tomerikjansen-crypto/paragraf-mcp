@@ -1227,7 +1227,8 @@ class LovdataSyncService:
             # Use IN clause with parameter placeholders
             placeholders = ",".join("?" * len(clean_ids))
             rows = conn.execute(
-                f"SELECT * FROM sections WHERE dok_id = ? AND section_id IN ({placeholders})",
+                f"SELECT * FROM sections WHERE dok_id = ? AND section_id IN ({placeholders})"
+                " ORDER BY id",
                 [doc["dok_id"], *clean_ids],
             ).fetchall()
 

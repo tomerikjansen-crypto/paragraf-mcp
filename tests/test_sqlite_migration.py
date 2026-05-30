@@ -258,3 +258,19 @@ def test_get_section_size_er_deterministisk_ved_kollisjon(tmp_path):
     info = svc.get_section_size("testforskrift", "Artikkel 1")
     assert info is not None
     assert info["char_count"] == len("mye lengre innhold her")
+
+
+def test_get_sections_batch_er_deterministisk_ved_kollisjon(tmp_path):
+    """Batch-oppslag skal velge nyeste rad (hoyeste id) ved kollisjon."""
+    svc = _seed_doc_og_seksjoner(
+        tmp_path,
+        [
+            ("Artikkel 1", "vedlegg I", "vedlegg-1/art-1"),
+            ("Artikkel 1", "vedlegg II", "vedlegg-2/art-1"),  # nyeste
+            ("Artikkel 2", "art 2 tekst", "vedlegg-1/art-2"),
+        ],
+    )
+    result = svc.get_sections_batch("testforskrift", ["Artikkel 1", "Artikkel 2"])
+    by_id = {s.section_id: s for s in result}
+    assert by_id["Artikkel 1"].content == "vedlegg II"
+    assert by_id["Artikkel 2"].content == "art 2 tekst"
