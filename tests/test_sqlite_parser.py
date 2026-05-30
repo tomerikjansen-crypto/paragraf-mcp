@@ -143,6 +143,36 @@ def test_nested_letter_list_not_duplicated(tmp_path):
     assert content.count("radonsperre") == 1
 
 
+def test_block_boundaries_spaced_inline_not_split(tmp_path):
+    """Ledd-/liste-grenser skal faa mellomrom ('skal ha', ikke 'skalha'), men
+    inline sup/sub skal IKKE skilles ('200 Bq/m3', ikke '200 Bq/m 3')."""
+    content = _parse(tmp_path, TEK17_13_5)["13-5"].content
+    # Blokk-grense: intro-prosa moeter bokstavliste -> mellomrom
+    assert "skal ha radonsperre" in content
+    assert "og være tilrettelagt" in content
+    assert "skalha" not in content
+    assert "ogvære" not in content
+    # Inline sup: maaleenheten skal ikke splittes av <sup>
+    assert "200 Bq/m3" in content
+    assert "200 Bq/m 3" not in content
+
+
+# Ekte TEK17-kilde har mellomrom foer punktum etter <sup>: "200 Bq/m<sup>3</sup> .".
+RADON_SUP_SPACE = """<!DOCTYPE html><html><body><main class="documentBody">
+<article class="legalArticle" data-name="§13-5b" id="k13-5b">
+  <h4 class="legalArticleHeader"><span class="legalArticleValue">§ 13-5b</span></h4>
+  <article class="numberedLegalP" data-numerator="1" id="k13-5b-1">(1) Aarsmiddelverdi skal ikke overstige 200 Bq/m<sup>3</sup> .</article>
+</article>
+</main></body></html>"""
+
+
+def test_no_space_before_punctuation(tmp_path):
+    """Kilde-XML kan ha mellomrom foer punktum (Bq/m<sup>3</sup> .) - skal renses."""
+    content = _parse(tmp_path, RADON_SUP_SPACE)["13-5b"].content
+    assert "200 Bq/m3." in content
+    assert "200 Bq/m3 ." not in content
+
+
 def test_flat_legalp_ledd_still_parsed(tmp_path):
     """Flate legalP-ledd (uten nummerering) skal fortsatt parses korrekt."""
     content = _parse(tmp_path, TEK17_1_1)["1-1"].content

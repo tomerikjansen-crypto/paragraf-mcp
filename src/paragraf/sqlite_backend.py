@@ -10,6 +10,7 @@ License: NLOD 2.0
 
 import logging
 import os
+import re
 import sqlite3
 import sys
 import tarfile
@@ -20,7 +21,7 @@ from datetime import datetime
 from pathlib import Path
 
 import httpx
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString, Tag
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,43 @@ _SUPPLEMENT_CONTENT_CLASSES = {
     "indent",
     "centeredP",
 }
+
+# Inline-tagger som IKKE skal gi mellomrom rundt seg - teksten inne i dem er en
+# fortsettelse av samme ord/uttrykk (f.eks. <sup> i "200 Bq/m3"). Alt annet
+# behandles som blokk -> mellomrom ved grensen.
+_INLINE_TAGS = {"sup", "sub", "em", "strong", "i", "b", "u", "a", "span", "small", "abbr"}
+
+
+def _block_aware_text(element) -> str:
+    """Hent tekst med mellomrom ved BLOKK-grenser, men ikke inne i inline-tagger.
+
+    `get_text(strip=True)` limer alt sammen uten separator -> "skalha" naar et
+    nummerert ledd omslutter en bokstavliste. `get_text(separator=" ")` skiller
+    ogsaa inne i inline <sup>/<sub> -> "200 Bq/m 3". Denne gaar gjennom treet og
+    legger mellomrom KUN ved blokk-element-grenser (ol, li, legalP,
+    numberedLegalP osv.), saa ledd-prosa og bokstavlister faar mellomrom mens
+    maaleenheter med <sup> forblir intakte.
+    """
+    parts: list[str] = []
+
+    def walk(node):
+        for child in node.children:
+            if isinstance(child, NavigableString):
+                parts.append(str(child))
+            elif isinstance(child, Tag):
+                if child.name in _INLINE_TAGS:
+                    walk(child)
+                else:
+                    parts.append(" ")
+                    walk(child)
+                    parts.append(" ")
+
+    walk(element)
+    text = " ".join("".join(parts).split())
+    # Kilde-XML har av og til mellomrom foer setnings-punktum (f.eks.
+    # "200 Bq/m<sup>3</sup> ." -> "200 Bq/m3 ."). Det er aldri korrekt i norsk
+    # lovtekst - fjern mellomrom foran . , ; : ).
+    return re.sub(r" ([.,;:)])", r"\1", text)
 
 
 # =============================================================================
@@ -746,7 +784,7 @@ class LovdataSyncService:
                         classes = [classes]
                     class_set = set(classes)
                     if class_set & legal_p_classes and "footnote" not in " ".join(classes).lower():
-                        text = child.get_text(strip=True)
+                        text = _block_aware_text(child)
                         if text:
                             content_parts.append(text)
                     elif class_set & _SUPPLEMENT_CONTENT_CLASSES:
@@ -756,7 +794,7 @@ class LovdataSyncService:
                         # i stedet for aa fanges. Dedupe mot allerede-fanget
                         # ledd-tekst (et supplement kan gjenta tekst fra et
                         # overliggende ledd).
-                        text = child.get_text(strip=True)
+                        text = _block_aware_text(child)
                         if text and text not in content_parts:
                             content_parts.append(text)
                     elif not (class_set & _IGNORED_DIRECT_CHILD_CLASSES):
@@ -776,7 +814,7 @@ class LovdataSyncService:
                 # (not a legal_p class) and the fallbacks never fire when other
                 # ledd were captured. Mirrors supabase_backend.py:668-672.
                 for cont in article.find_all("p", class_="leddfortsettelse"):
-                    text = cont.get_text(strip=True)
+                    text = _block_aware_text(cont)
                     if text and text not in content_parts:
                         content_parts.append(text)
 
@@ -784,13 +822,13 @@ class LovdataSyncService:
                 # nesting) - recurse for any legalP descendants.
                 if not content_parts:
                     for ledd in article.find_all("article", class_="legalP"):
-                        text = ledd.get_text(strip=True)
+                        text = _block_aware_text(ledd)
                         if text:
                             content_parts.append(text)
 
                 # Fallback 2: still empty - take the whole article text.
                 if not content_parts:
-                    content_parts.append(article.get_text(strip=True))
+                    content_parts.append(_block_aware_text(article))
 
                 # Get absolute address (cast to str for type safety)
                 raw_addr = article.get("data-absoluteaddress") or article.get("id")
